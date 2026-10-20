@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang ="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>The Last Braincell</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+            }
+
+            .board {
+                display: grid;
+                grid-template-columns: repeat(6, 40px);
+                gap: 4px;
+                justify-content: center;
+            }
+
+            .square {
+                width: 40px;
+                height: 40px;
+                background: #4a90e2;
+                border: none;
+                cursor: pointer;
+            }
+
+            .empty {
+                width: 40px;
+                height: 40px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Do You Have a Braincell Left?</h1>
+        <p>Welcome to The Last Braincell. Here you must click pixels to fill up the page. The person to fill in the last pixel wins and officially has the Last Braincell.</p>
+        <p>
+            {% if remaining == 0 %}
+                Last Pixel Clicked!
+            {% else %}
+                {{ remaining }} left
+            {% endif %}
+        </p>
+        <div class="board">
+            {% for sq in range(size * size) %}
+                {% if sq in alive %}
+                    <form method="post">
+                        <button class="square" name="square"
+                                value="{{ sq }}"></button>
+                    </form>
+                {% else %}
+                    <div class="empty"></div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </body>
+</html>
