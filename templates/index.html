@@ -1,56 +1,51 @@
 <!DOCTYPE html>
-<html lang ="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>The Last Braincell</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                text-align: center;
-            }
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-            .board {
-                display: grid;
-                grid-template-columns: repeat(6, 40px);
-                gap: 4px;
-                justify-content: center;
-            }
+    <title>The Last Pixel</title>
 
-            .square {
-                width: 40px;
-                height: 40px;
-                background: #4a90e2;
-                border: none;
-                cursor: pointer;
-            }
+    <!-- Connect the external CSS file -->
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
 
-            .empty {
-                width: 40px;
-                height: 40px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Do You Have a Braincell Left?</h1>
-        <p>Welcome to The Last Braincell. Here you must click pixels to fill up the page. The person to fill in the last pixel wins and officially has the Last Braincell.</p>
-        <p>
-            {% if remaining == 0 %}
-                Last Pixel Clicked!
+<body>
+
+    <h1>The Last Pixel</h1>
+
+    <!-- Display the number of remaining squares -->
+    <p id="status">
+        {% if remaining == 0 %}
+            Last Pixel Clicked!
+        {% else %}
+            {{ remaining }} left
+        {% endif %}
+    </p>
+
+    <!-- Create the game board -->
+    <div class="board">
+        {% for sq in range(size * size) %}
+
+            {% if sq in alive %}
+                <!-- A square that can be clicked -->
+                <form method="post">
+                    <button
+                        class="square"
+                        type="submit"
+                        name="square"
+                        value="{{ sq }}"
+                        aria-label="Remove square {{ sq + 1 }}">
+                    </button>
+                </form>
             {% else %}
-                {{ remaining }} left
+                <!-- Preserve the empty space -->
+                <div class="empty"></div>
             {% endif %}
-        </p>
-        <div class="board">
-            {% for sq in range(size * size) %}
-                {% if sq in alive %}
-                    <form method="post">
-                        <button class="square" name="square"
-                                value="{{ sq }}"></button>
-                    </form>
-                {% else %}
-                    <div class="empty"></div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    </body>
+
+        {% endfor %}
+    </div>
+
+</body>
 </html>
