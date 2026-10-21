@@ -15,7 +15,7 @@ The AWS has been constucted with the assistance of Claude.ai
 
 10/18/26
   - Created an EC2 instance
-  - added a security group to EC2 instance called "game-board"
+  - added a security group to EC2 instance called "game-board-sg"
   - installed python dependencies 
   - pasted websocket_connection.py into the instance
 
