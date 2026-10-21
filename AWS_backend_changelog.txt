@@ -6,3 +6,18 @@ The AWS has been constucted with the assistance of Claude.ai
   - Added budget set to $1.00
   - Created a DynamoDB Table to hold data
   - working on developing a lambda function to fetch info from DynamoDB table
+
+10/15/26
+  - After websocket_connection.py was added I realised that the Lambda fuction would not work 
+    due to a Lambda not keeping memory between states which means they are not compatible with websockets
+  - Pivoting to a EC2 virtual server, which is roughly $8/month
+  - researching further before deploying a EC2 due to a cost
+
+10/18/26
+  - Created an EC2 instance
+  - added a security group to EC2 instance called "game-board"
+  - installed python dependencies 
+  - pasted websocket_connection.py into the instance
+
+10/20/26 *Changelog updates were not published due to user error*
+  - testing software
