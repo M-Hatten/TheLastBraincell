@@ -6,3 +6,47 @@ The AWS has been constucted with the assistance of Claude.ai
   - Added budget set to $1.00
   - Created a DynamoDB Table to hold data
   - working on developing a lambda function to fetch info from DynamoDB table
+
+10/15/26
+  - After websocket_connection.py was added I realised that the Lambda fuction would not work 
+    due to a Lambda not keeping memory between states which means they are not compatible with websockets
+  - Pivoting to a EC2 virtual server, which is roughly $8/month
+  - researching further before deploying a EC2 due to a cost
+
+10/18/26
+  - Created an EC2 instance
+  - added a security group to EC2 instance called "game-board-sg"
+  - installed python dependencies 
+  - pasted websocket_connection.py into the instance
+
+10/20/26 *Changelog updates were not published due to user error*
+  - testing software
+  - to test for uvicorn / websocket connection
+      - follow ssh instruciton from the instance -> connect page
+      - cd ~/app && source venv/bin/activate
+      - uvicorn main:app --host 0.0.0.0 --port 8000
+      - replace 0.0.0.0 with the IPV4 of the instance
+
+- testing how to get the EC2 instance to run the app by using its OS
+* the following was created using Claude *
+  sudo tee /etc/systemd/system/gameboard.service > /dev/null << 'EOF'
+  [Unit]
+  Description=Gameboard FastAPI WebSocket Server
+  After=network.target
+  
+  [Service]
+  User=ec2-user
+  Group=ec2-user
+  WorkingDirectory=/home/ec2-user/app
+  ExecStart=/home/ec2-user/app/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+  Restart=always
+  RestartSec=3
+  Environment=PYTHONUNBUFFERED=1
+  
+  [Install]
+  WantedBy=multi-user.target
+  EOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now gameboard
+  sudo systemctl status gameboard
+* https://claude.ai/share/8165afd2-c459-4c17-8dda-4d615f4f8486 *
