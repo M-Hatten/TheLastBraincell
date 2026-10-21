@@ -21,3 +21,8 @@ The AWS has been constucted with the assistance of Claude.ai
 
 10/20/26 *Changelog updates were not published due to user error*
   - testing software
+  - to test for uvicorn / websocket connection
+      - follow ssh instruciton from the instance -> connect page
+      - cd ~/app && source venv/bin/activate
+      - uvicorn main:app --host 0.0.0.0 --port 8000
+      - replace 0.0.0.0 with the IPV4 of the instance
