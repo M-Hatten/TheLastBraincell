@@ -50,3 +50,7 @@ The AWS has been constucted with the assistance of Claude.ai
   sudo systemctl enable --now gameboard
   sudo systemctl status gameboard
 * https://claude.ai/share/8165afd2-c459-4c17-8dda-4d615f4f8486 *
+
+10/28/2026
+  - Creating a guide for other team member so they can access the AWS via SSH connection. Team members will need to add the secure connection
+    themselves as I cannot reliably add their access ip's
