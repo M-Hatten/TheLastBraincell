@@ -30,8 +30,11 @@ page = """
 </div>
 <p id="status">{{ size * size }} left</p> 
 
+<button id="reset">Button</button>
+
 <script>
   const status = document.getElementById("status");
+  const reset = document.getElementById("reset");
   document.querySelectorAll(".square").forEach(sq => { 
     sq.addEventListener("click", async () => { 
       const res = await fetch(`/click/${sq.dataset.id}`, { method: "POST" }); 
@@ -41,7 +44,18 @@ page = """
       
     });
   });
+
+
+
+  reset.addEventListener("click", async () => {
+    const r = await fetch("/reset", {method: "POST"});
+    const data = await r.json();
+    document.querySelectorAll(".square").forEach(sq => sq.classList.remove("gone"));
+    status.textContent = `${data.left} left`;
+    });
 </script>
+
+
 """
 # Notes: 
 # Showing a grid with each square being on 6 pixels size
@@ -68,5 +82,18 @@ def click(i):
     return jsonify(removed=removed, left=len(alive), won=len(alive) == 0)
     #Javascript converts deleting the squares into data
 
+# Resetting the board function
+@app.route("/reset", methods=["POST"])
+def reset():
+  alive.clear()
+  alive.update(range(Size * Size))
+  return jsonify(left=len(alive))
+
+    
+
 if __name__ == "__main__":
     app.run(debug=True)
+
+#Testing 
+# Run code first 
+# Then http://127.0.0.1:5000
