@@ -5,7 +5,7 @@ Continuation of the WebSocket connection management proof of concept.
 Run locally with:
     uvicorn main:app --reload
 
-Each browser tab receives a session UUID that survives page refreshes.
+Each browser tab receives a session UUID and name that survive page refreshes.
 Active connections are broadcast to all connected browsers.
 """
 
@@ -16,7 +16,7 @@ import uuid
 app = FastAPI()
 
 
-# Placeholder webpage for displaying session IDs and active connections.
+# Placeholder webpage for displaying session IDs, names, and connections.
 placeholder_html = """
 <!DOCTYPE html>
 <html>
@@ -30,12 +30,23 @@ placeholder_html = """
     <h2>Your Client ID:</h2>
     <p id="client_id">Connecting...</p>
 
+    <!-- Allow users to enter and submit their display names. -->
+    <h2>Your Name:</h2>
+    <input type="text" id="name_input" placeholder="Enter your name">
+    <button onclick="submitName()">Set Name</button>
+
     <h2>Active Connections:</h2>
     <ul id="connections"></ul>
 
     <script>
-        // Retrieve this tab's previous UUID, if one exists.
+        // Retrieve this tab's previous UUID and name, if available.
         let client_id = sessionStorage.getItem("client_id");
+        let client_name = sessionStorage.getItem("client_name");
+
+        // Restore the previous name in the input field.
+        if (client_name !== null) {
+            document.getElementById("name_input").value = client_name;
+        }
 
         // Connect to the FastAPI WebSocket endpoint.
         const protocol =
@@ -45,13 +56,30 @@ placeholder_html = """
             protocol + "//" + location.host + "/ws"
         );
 
-        // Identify this browser session when the connection opens.
+        // Identify this browser session using its saved UUID and name.
         socket.onopen = function() {
             socket.send(JSON.stringify({
                 type: "identify",
-                client_id: client_id
+                client_id: client_id,
+                name: client_name
             }));
         };
+
+        // Send the entered name to FastAPI and save it for page refreshes.
+        function submitName() {
+            const name = document.getElementById("name_input").value.trim();
+
+            if (name !== "" && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: "set_name",
+                    name: name
+                }));
+
+                // Remember the submitted name in this browser tab.
+                client_name = name;
+                sessionStorage.setItem("client_name", name);
+            }
+        }
 
         // Process messages sent by the FastAPI server.
         socket.onmessage = function(event) {
@@ -74,6 +102,7 @@ placeholder_html = """
                 message.clients.forEach(client => {
                     const item = document.createElement("li");
 
+                    // Display each client's UUID and submitted name.
                     item.textContent =
                         client.client_id +
                         " | Name: " + (client.name ?? "None");
@@ -97,9 +126,11 @@ placeholder_html = """
 class Connection:
     """Stores the WebSocket, name, and UUID of one client."""
 
-    def __init__(self, ws: WebSocket, client_id=None):
+    def __init__(self, ws: WebSocket, client_id=None, name=None):
         self.websocket = ws
-        self.name = None
+
+        # Restore the previous name or use None for a new client.
+        self.name = name
 
         # Reuse a session UUID or generate one for a new session.
         self.client_id = (
@@ -121,7 +152,7 @@ class WebsocketManager:
         self.active_connections: list[Connection] = []
 
     async def connect(self, websocket: WebSocket):
-        # Accept the WebSocket and wait for the browser's session ID.
+        # Accept the WebSocket and wait for the browser's session details.
         await websocket.accept()
         message = await websocket.receive_json()
 
@@ -140,7 +171,17 @@ class WebsocketManager:
             except ValueError:
                 client_id = None
 
-        connection = Connection(websocket, client_id)
+        # Retrieve the previously submitted name from the browser.
+        name = message.get("name")
+
+        # Accept only valid, nonempty names.
+        if not isinstance(name, str) or not name.strip():
+            name = None
+        else:
+            name = name.strip()
+
+        # Create a connection using the previous UUID and name.
+        connection = Connection(websocket, client_id, name)
 
         # Remove any older active connection using this UUID.
         old_connection = self.get_connection_by_id(
@@ -236,7 +277,7 @@ async def websocket_endpoint(websocket: WebSocket):
     connection = None
 
     try:
-        # Establish a connection and recover the browser's session UUID.
+        # Establish a connection and recover the browser's session details.
         connection = await socket_manager.connect(websocket)
 
         if connection is None:
@@ -253,9 +294,20 @@ async def websocket_endpoint(websocket: WebSocket):
         # Notify all connected browsers about the updated list.
         await socket_manager.broadcast_connections()
 
-        # Keep receiving messages until the WebSocket disconnects.
+        # Listen for messages from the connected browser.
         while True:
-            await websocket.receive_text()
+            message = await websocket.receive_json()
+
+            # Update the user's name when a name submission is received.
+            if message.get("type") == "set_name":
+                name = message.get("name")
+
+                # Accept only nonempty strings as display names.
+                if isinstance(name, str) and name.strip():
+                    socket_manager.set_name(websocket, name.strip())
+
+                    # Broadcast the updated names to all connected clients.
+                    await socket_manager.broadcast_connections()
 
     except WebSocketDisconnect:
         if connection is not None:
