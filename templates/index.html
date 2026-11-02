@@ -24,6 +24,38 @@
         {% endif %}
     </p>
 
+    <div id="container">
+    <div class="row">
+        <div class="name">Player1</div><div class="score">430</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player2</div><div class="score">580</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player3</div><div class="score">310</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player4</div><div class="score">640</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player5</div><div class="score">495</div>
+    </div>
+    </div>
+
+    <div class="username">
+        <h2>What's your name?</h2>
+        <form id="usernameForm">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            <button type="submit">Save</button>
+        </form>
+        <p id="message"></p>
+    </div>
+
     <!-- Create the game board -->
     <div class="board">
         {% for sq in range(size * size) %}
@@ -46,6 +78,45 @@
 
         {% endfor %}
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+        // Check if a username is already saved and display it
+        const savedUsername = localStorage.getItem('username');
+        const message = document.getElementById('message');
+
+        if (savedUsername) {
+            message.textContent = `Welcome back, ${savedUsername}!`;
+        }
+
+        // Form submission handler
+        const form = document.getElementById('usernameForm');
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form from refreshing the page
+
+            // Get the entered username
+            const usernameInput = document.getElementById('username').value;
+
+            // Save the username in localStorage
+            localStorage.setItem('username', usernameInput);
+
+            // Display a message
+            message.textContent = `Username saved: ${usernameInput}`;
+        });
+        });
+        document.addEventListener('DOMContentLoaded', () => {
+        let elements = []
+        let container = document.querySelector('#container')
+        // Add each row to the array
+        container.querySelectorAll('.row').forEach(el => elements.push(el))
+        // Clear the container
+        container.innerHTML = ''
+        // Sort the array from highest to lowest
+        elements.sort((a, b) => b.querySelector('.score').textContent - a.querySelector('.score').textContent)
+        // Put the elements back into the container
+        elements.forEach(e => container.appendChild(e))
+        })
+    </script>
 
 </body>
 </html>
