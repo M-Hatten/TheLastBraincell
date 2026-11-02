@@ -13,6 +13,7 @@ Size = 6
 app = Flask(__name__)
 
 alive = set(range(Size * Size))
+clicks = 0
 
 # Everything inside the webpage
 page = """
@@ -29,30 +30,33 @@ page = """
   {% endfor %}
 </div>
 <p id="status">{{ size * size }} left</p> 
-
-<button id="reset">Button</button>
+<p id = "count">Clicks: 0</p>
 
 <script>
   const status = document.getElementById("status");
   const reset = document.getElementById("reset");
+  const count = document.getElementById("count");
+
   document.querySelectorAll(".square").forEach(sq => { 
     sq.addEventListener("click", async () => { 
       const res = await fetch(`/click/${sq.dataset.id}`, { method: "POST" }); 
       const data = await res.json(); 
       if (data.removed) sq.classList.add("gone"); 
+      count.textContent = `Clicks: ${data.clicks}`;
       status.textContent = data.won ? "You found the Last Pixel!" : `${data.left} left`;
-      
+      if (data.won) setTimeout(newGame, 2000);
     });
   });
 
-
-
-  reset.addEventListener("click", async () => {
+  async function newGame(){
     const r = await fetch("/reset", {method: "POST"});
     const data = await r.json();
     document.querySelectorAll(".square").forEach(sq => sq.classList.remove("gone"));
     status.textContent = `${data.left} left`;
-    });
+    count.textContent = `Clicks: ${data.clicks}`;
+    }
+
+    reset.addEventListener("click", newGame);
 </script>
 
 
@@ -66,9 +70,12 @@ page = """
 # when square is clicked run this function
 # when the square is removed, add gone rule to it
 # if someone clicks on last pixel, message, else keep saying how much is left
+# count.textContent = `Clicks: ${data.clicks}`; <- where it keeps track of the clicks
 
 @app.route("/") 
 def index():
+    global clicks 
+    clicks = 0 
     alive.clear()
     alive.update(range(Size * Size))   # every page load starts a new game
     return render_template_string(page, size=Size) # puts the board on the page
@@ -76,10 +83,12 @@ def index():
 # The clicking part
 @app.route("/click/<int:i>", methods=["POST"])
 def click(i):
+    global clicks 
     removed = i in alive and len(alive) > 0
     if removed:
         alive.remove(i)
-    return jsonify(removed=removed, left=len(alive), won=len(alive) == 0)
+        clicks += 1 # counting every click
+    return jsonify(removed=removed, left=len(alive), won=len(alive) == 0, clicks = clicks)
     #Javascript converts deleting the squares into data
 
 # Resetting the board function
