@@ -50,3 +50,14 @@ The AWS has been constucted with the assistance of Claude.ai
   sudo systemctl enable --now gameboard
   sudo systemctl status gameboard
 * https://claude.ai/share/8165afd2-c459-4c17-8dda-4d615f4f8486 *
+
+10/27/2026
+  - Issue occurred when attempting to login to the ssh portal of the VM to update code and provide access
+
+10/30/2026
+  - Issue solved local IP of main machine changed for a unknown reason
+  - Adding team members to IAM admin group for the AWS environment
+  - Added local IP of team members devices so they can ssh into the VM
+11/2/26
+  - Waiting on program updates to be tested before deployment to the VM
+  - researching how to make a public access URL in place of localhost 
