@@ -19,15 +19,20 @@ Active connections are broadcast to all connected browsers.
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from boardflash import Board
 import uuid
 
 app = FastAPI()
 
+# Serve the CSS file from the static directory.
+STATIC_PATH = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
+
 # Keep one shared board for all connected browsers.
 board = Board()
-INDEX_PATH = Path(__file__).with_name("index.html")
+INDEX_PATH = Path(__file__).with_name("index.html") # Filepath for the html that will serve as our webpage
 
 
 
@@ -134,6 +139,7 @@ class WebsocketManager:
             self.active_connections.remove(connection)
 
     def get_name(self, websocket: WebSocket):
+        # Get the name of an individual connection.
         connection = self.get_connection(websocket)
 
         if connection is not None:
@@ -142,6 +148,7 @@ class WebsocketManager:
         return None
 
     def set_name(self, websocket: WebSocket, name: str):
+        # Set the name of an individual connection.
         connection = self.get_connection(websocket)
 
         if connection is not None:
@@ -187,7 +194,7 @@ socket_manager = WebsocketManager()
 
 @app.get("/")
 def root():
-    # Serve the game page rather than the old placeholder.
+    # Serve the game page (replaced placeholder from previous iterations).
     return FileResponse(INDEX_PATH)
 
 

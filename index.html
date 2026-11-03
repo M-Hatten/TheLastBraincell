@@ -6,14 +6,8 @@
 
     <title>The Last Pixel</title>
 
-    <!-- Keep the board usable without a separate CSS file. -->
-    <style>
-        .board { display: grid; grid-template-columns: repeat(6, 40px); gap: 4px; }
-        .square, .empty { width: 40px; height: 40px; box-sizing: border-box; }
-        .square { background: #4a90e2; border: 0; cursor: pointer; }
-        .empty { visibility: hidden; }
-        .row { display: flex; gap: 16px; }
-    </style>
+    <!-- Load the stylesheet served by FastAPI. -->
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
