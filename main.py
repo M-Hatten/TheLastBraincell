@@ -1,126 +1,35 @@
 
 """
-Continuation of the WebSocket connection management proof of concept.
+Connecting disparate work into one unit.
 
-Run locally with:
-    uvicorn main:app --reload
+Needs to be run from a virtual environment.
+-- make directory for virtual env
+python3 -m venv .venv
+source .venv/bin/activate
+-- activate virtual env
+source .venv/bin/activate
+-- install required packages to venv
+python -m pip install fastapi "uvicorn[standard]"
+-- Run venv locally with:
+    python -m uvicorn main:app --reload
 
 Each browser tab receives a session UUID and name that survive page refreshes.
 Active connections are broadcast to all connected browsers.
 """
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from pathlib import Path
+from boardflash import Board
 import uuid
 
 app = FastAPI()
 
+# Keep one shared board for all connected browsers.
+board = Board()
+INDEX_PATH = Path(__file__).with_name("index.html")
 
-# Placeholder webpage for displaying session IDs, names, and connections.
-placeholder_html = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>WebSocket Connections</title>
-</head>
 
-<body>
-    <h1>WebSocket Connection Test</h1>
-
-    <h2>Your Client ID:</h2>
-    <p id="client_id">Connecting...</p>
-
-    <!-- Allow users to enter and submit their display names. -->
-    <h2>Your Name:</h2>
-    <input type="text" id="name_input" placeholder="Enter your name">
-    <button onclick="submitName()">Set Name</button>
-
-    <h2>Active Connections:</h2>
-    <ul id="connections"></ul>
-
-    <script>
-        // Retrieve this tab's previous UUID and name, if available.
-        let client_id = sessionStorage.getItem("client_id");
-        let client_name = sessionStorage.getItem("client_name");
-
-        // Restore the previous name in the input field.
-        if (client_name !== null) {
-            document.getElementById("name_input").value = client_name;
-        }
-
-        // Connect to the FastAPI WebSocket endpoint.
-        const protocol =
-            location.protocol === "https:" ? "wss:" : "ws:";
-
-        const socket = new WebSocket(
-            protocol + "//" + location.host + "/ws"
-        );
-
-        // Identify this browser session using its saved UUID and name.
-        socket.onopen = function() {
-            socket.send(JSON.stringify({
-                type: "identify",
-                client_id: client_id,
-                name: client_name
-            }));
-        };
-
-        // Send the entered name to FastAPI and save it for page refreshes.
-        function submitName() {
-            const name = document.getElementById("name_input").value.trim();
-
-            if (name !== "" && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: "set_name",
-                    name: name
-                }));
-
-                // Remember the submitted name in this browser tab.
-                client_name = name;
-                sessionStorage.setItem("client_name", name);
-            }
-        }
-
-        // Process messages sent by the FastAPI server.
-        socket.onmessage = function(event) {
-            const message = JSON.parse(event.data);
-
-            // Remember the UUID so refreshing preserves the session.
-            if (message.type === "welcome") {
-                client_id = message.client_id;
-                sessionStorage.setItem("client_id", client_id);
-
-                document.getElementById("client_id")
-                    .textContent = client_id;
-            }
-
-            // Replace the displayed list with the latest connections.
-            if (message.type === "connections_updated") {
-                const list = document.getElementById("connections");
-                list.replaceChildren();
-
-                message.clients.forEach(client => {
-                    const item = document.createElement("li");
-
-                    // Display each client's UUID and submitted name.
-                    item.textContent =
-                        client.client_id +
-                        " | Name: " + (client.name ?? "None");
-
-                    list.appendChild(item);
-                });
-            }
-        };
-
-        // Indicate when this browser loses its WebSocket connection.
-        socket.onclose = function() {
-            document.getElementById("client_id")
-                .textContent = "Disconnected";
-        };
-    </script>
-</body>
-</html>
-"""
 
 
 class Connection:
@@ -263,13 +172,23 @@ class WebsocketManager:
                 pass
 
 
+    async def broadcast_board(self, state):
+        # Show every player the same board after a click or reset.
+        message = {"type": "board_updated", **state}
+        for connection in self.active_connections[:]:
+            try:
+                await connection.websocket.send_json(message)
+            except Exception:
+                pass
+
+
 socket_manager = WebsocketManager()
 
 
 @app.get("/")
 def root():
-    # Serve the placeholder webpage directly from FastAPI.
-    return HTMLResponse(placeholder_html)
+    # Serve the game page rather than the old placeholder.
+    return FileResponse(INDEX_PATH)
 
 
 @app.websocket("/ws")
@@ -291,7 +210,8 @@ async def websocket_endpoint(websocket: WebSocket):
             "client_id": connection.client_id
         })
 
-        # Notify all connected browsers about the updated list.
+        # Send the current shared board and connection list.
+        await websocket.send_json({"type": "board_updated", **board.state()})
         await socket_manager.broadcast_connections()
 
         # Listen for messages from the connected browser.
@@ -308,6 +228,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     # Broadcast the updated names to all connected clients.
                     await socket_manager.broadcast_connections()
+
+            # Process valid clicks on the single shared board.
+            elif message.get("type") == "click":
+                square = message.get("square")
+                if type(square) is int and board.click(square):
+                    await socket_manager.broadcast_board(board.state())
+
+            # Start a fresh round only after the last pixel is gone.
+            elif message.get("type") == "reset":
+                if board.remaining == 0:
+                    board.reset()
+                    await socket_manager.broadcast_board(board.state())
 
     except WebSocketDisconnect:
         if connection is not None:
