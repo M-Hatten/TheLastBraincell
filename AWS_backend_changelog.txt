@@ -61,3 +61,8 @@ The AWS has been constucted with the assistance of Claude.ai
 11/2/26
   - Waiting on program updates to be tested before deployment to the VM
   - researching how to make a public access URL in place of localhost 
+
+11/4/26
+  - program seems to be working but has not yet been moved to the VM
+  - Will use a product called Elastic IP to change the localhost into an accessible website durring next sprint
+  - SQL has not been added to VM, testing with data/log has been given to the front end members to verify the idea will work before proceeding 
