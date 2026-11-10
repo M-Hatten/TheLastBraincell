@@ -8,7 +8,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 -- activate virtual env
 source .venv/bin/activate
--- install required packages to venv
+-- install required packages to venv (if you don't have them already)
 python -m pip install fastapi "uvicorn[standard]"
 -- Run venv locally with:
     python -m uvicorn main:app --reload
