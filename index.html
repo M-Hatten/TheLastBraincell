@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>The Last Pixel</title>
+
+    <!-- Load the stylesheet served by FastAPI. -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    <h1>The Last Pixel</h1>
+
+    <!-- The server sends the current remaining-square count. -->
+    <p id="status">Connecting...</p>
+    <p id="count">Clicks: 0</p>
+
+    <div id="container">
+    <div class="row">
+        <div class="name">Player1</div><div class="score">430</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player2</div><div class="score">580</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player3</div><div class="score">310</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player4</div><div class="score">640</div>
+    </div>
+
+    <div class="row">
+        <div class="name">Player5</div><div class="score">495</div>
+    </div>
+    </div>
+
+    <div class="username">
+        <h2>What's your name?</h2>
+        <form id="usernameForm">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            <button type="submit">Save</button>
+        </form>
+        <p id="message"></p>
+    </div>
+
+    <!-- JavaScript fills the board using the shared server state. -->
+    <div class="board" id="board"></div>
+
+    <!-- Keep the current browser session visible alongside the game. -->
+    <p>Your Client ID: <span id="client_id">Connecting...</span></p>
+    <h2>Active Connections:</h2>
+    <ul id="connections"></ul>
+
+    <script>
+        // Restore this tab's identity and connect to the FastAPI server.
+        let client_id = sessionStorage.getItem('client_id');
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(protocol + '//' + location.host + '/ws');
+        socket.onopen = () => socket.send(JSON.stringify({
+            type: 'identify',
+            client_id: client_id,
+            name: sessionStorage.getItem('client_name')
+        }));
+
+        // Send pixel clicks; only the server decides whether they count.
+        document.getElementById('board').addEventListener('click', event => {
+            const square = event.target.closest('[data-square]');
+            if (square && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({type: 'click', square: Number(square.dataset.square)}));
+            }
+        });
+
+        // Render the authoritative board state for every connected player.
+        function renderBoard(state) {
+            const board = document.getElementById('board');
+            board.style.gridTemplateColumns = `repeat(${state.size}, 40px)`;
+            const alive = new Set(state.alive);
+            board.replaceChildren();
+            for (let i = 0; i < state.size * state.size; i++) {
+                const square = document.createElement(alive.has(i) ? 'button' : 'div');
+                square.className = alive.has(i) ? 'square' : 'empty';
+                if (alive.has(i)) {
+                    square.dataset.square = i;
+                    square.setAttribute('aria-label', `Remove square ${i + 1}`);
+                }
+                board.appendChild(square);
+            }
+            document.getElementById('status').textContent =
+                state.won ? 'Last Pixel Clicked!' : `${state.left} left`;
+            document.getElementById('count').textContent = `Clicks: ${state.clicks}`;
+            // After a win, a connected browser requests a reset after two seconds.
+            if (state.won && !resetPending) {
+                resetPending = true;
+                setTimeout(() => {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({type: 'reset'}));
+                    }
+                    resetPending = false;
+                }, 2000);
+            }
+        }
+        let resetPending = false;
+
+        // Handle identity, player list, and board updates from FastAPI.
+        socket.onmessage = event => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'welcome') {
+                client_id = message.client_id;
+                sessionStorage.setItem('client_id', client_id);
+                document.getElementById('client_id').textContent = client_id;
+            } else if (message.type === 'connections_updated') {
+                const list = document.getElementById('connections');
+                list.replaceChildren();
+                message.clients.forEach(client => {
+                    const item = document.createElement('li');
+                    item.textContent = `${client.client_id} | Name: ${client.name ?? 'None'}`;
+                    list.appendChild(item);
+                });
+            } else if (message.type === 'board_updated') {
+                renderBoard(message);
+            }
+        };
+        socket.onclose = () => {
+            document.getElementById('client_id').textContent = 'Disconnected';
+        };
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+        // Check if a username is already saved and display it
+        const savedUsername = sessionStorage.getItem('client_name');
+        const message = document.getElementById('message');
+
+        if (savedUsername) {
+            message.textContent = `Welcome back, ${savedUsername}!`;
+        }
+
+        // Restore the name to the existing form on reload.
+        if (savedUsername) {
+            document.getElementById('username').value = savedUsername;
+        }
+        // Form submission handler
+        const form = document.getElementById('usernameForm');
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form from refreshing the page
+
+            // Get the entered username
+            const usernameInput = document.getElementById('username').value.trim();
+            if (!usernameInput || socket.readyState !== WebSocket.OPEN) return;
+
+            // Send the name to FastAPI and save it for page refreshes.
+            sessionStorage.setItem('client_name', usernameInput);
+            socket.send(JSON.stringify({type: 'set_name', name: usernameInput}));
+
+            // Display a message
+            message.textContent = `Username saved: ${usernameInput}`;
+        });
+        });
+        document.addEventListener('DOMContentLoaded', () => {
+        let elements = []
+        let container = document.querySelector('#container')
+        // Add each row to the array
+        container.querySelectorAll('.row').forEach(el => elements.push(el))
+        // Clear the container
+        container.innerHTML = ''
+        // Sort the array from highest to lowest
+        elements.sort((a, b) => b.querySelector('.score').textContent - a.querySelector('.score').textContent)
+        // Put the elements back into the container
+        elements.forEach(e => container.appendChild(e))
+        })
+    </script>
+
+</body>
+</html>
