@@ -18,27 +18,12 @@
     <p id="status">Connecting...</p>
     <p id="count">Clicks: 0</p>
 
-    <div id="container">
-    <div class="row">
-        <div class="name">Player1</div><div class="score">430</div>
+    <!-- Database leaderboard: rows are created from live WebSocket data. -->
+    <div id="container" aria-label="Leaderboard">
+        <p>Loading leaderboard...</p>
     </div>
-
-    <div class="row">
-        <div class="name">Player2</div><div class="score">580</div>
-    </div>
-
-    <div class="row">
-        <div class="name">Player3</div><div class="score">310</div>
-    </div>
-
-    <div class="row">
-        <div class="name">Player4</div><div class="score">640</div>
-    </div>
-
-    <div class="row">
-        <div class="name">Player5</div><div class="score">495</div>
-    </div>
-    </div>
+    <!-- Expand the leaderboard to scroll through all players, 20 rows at a time. -->
+    <button id="leaderboardToggle" type="button" aria-expanded="false" aria-controls="container" hidden>Show all players ▾</button>
 
     <div class="username">
         <h2>What's your name?</h2>
@@ -49,6 +34,9 @@
         </form>
         <p id="message"></p>
     </div>
+
+    <!-- Show name and cooldown feedback without changing the shared board. -->
+    <p id="clickNotice" role="status">Save a name to start playing.</p>
 
     <!-- JavaScript fills the board using the shared server state. -->
     <div class="board" id="board"></div>
@@ -69,10 +57,30 @@
             name: sessionStorage.getItem('client_name')
         }));
 
+        // Keep the current tab's saved name and last successful click for visual feedback.
+        let savedPlayerName = sessionStorage.getItem('client_name');
+        let nextClickAllowed = 0;
+
+        // Show when a player can click; the server still enforces all restrictions.
+        function updateClickNotice() {
+            const notice = document.getElementById('clickNotice');
+            const remaining = Math.max(0, Math.ceil((nextClickAllowed - Date.now()) / 1000));
+            notice.textContent = !savedPlayerName ? 'Save a name to start playing.' :
+                remaining ? `Next click available in ${remaining}s` : 'You can click a pixel.';
+        }
+        // Refresh the cooldown countdown once per second.
+        setInterval(updateClickNotice, 1000);
+        updateClickNotice();
+
         // Send pixel clicks; only the server decides whether they count.
         document.getElementById('board').addEventListener('click', event => {
             const square = event.target.closest('[data-square]');
             if (square && socket.readyState === WebSocket.OPEN) {
+                // Don't send clicks without a saved name or during a local cooldown.
+                if (!savedPlayerName || Date.now() < nextClickAllowed) {
+                    updateClickNotice();
+                    return;
+                }
                 socket.send(JSON.stringify({type: 'click', square: Number(square.dataset.square)}));
             }
         });
@@ -108,6 +116,57 @@
         }
         let resetPending = false;
 
+        // Keep the complete leaderboard in memory so the display can be expanded or collapsed.
+        let leaderboardPlayers = [];
+        let leaderboardExpanded = false;
+
+        // Show only the top 10 by default, or all players inside a 20-row scroll area.
+        function renderLeaderboard(players) {
+            leaderboardPlayers = [...players].sort((a, b) => b.score - a.score);
+            const container = document.getElementById('container');
+            const toggle = document.getElementById('leaderboardToggle');
+            const scrollPosition = container.scrollTop;
+            container.replaceChildren();
+            container.classList.toggle('leaderboard-expanded', leaderboardExpanded);
+
+            // Hide the expand button unless more than 10 players are recorded.
+            toggle.hidden = leaderboardPlayers.length <= 10;
+            toggle.textContent = leaderboardExpanded ? 'Show top 10 ▴' : 'Show all players ▾';
+            toggle.setAttribute('aria-expanded', String(leaderboardExpanded));
+
+            // Show a message when the database has no player records.
+            if (!leaderboardPlayers.length) {
+                container.textContent = 'No players yet.';
+                return;
+            }
+
+            // Display the top 10, or every player when expanded.
+            const visiblePlayers = leaderboardExpanded ? leaderboardPlayers : leaderboardPlayers.slice(0, 10);
+            visiblePlayers.forEach(player => {
+                // Build rows safely without interpreting player names as HTML.
+                const row = document.createElement('div');
+                row.className = 'row';
+                const name = document.createElement('div');
+                name.className = 'name';
+                name.textContent = player.name || 'Unnamed Player';
+                const score = document.createElement('div');
+                score.className = 'score';
+                score.textContent = player.score;
+                row.append(name, score);
+                container.appendChild(row);
+            });
+
+            // Preserve the scroll position during live score updates when expanded.
+            if (leaderboardExpanded) container.scrollTop = scrollPosition;
+        }
+
+        // Toggle between the top 10 and the full scrollable leaderboard.
+        document.getElementById('leaderboardToggle').addEventListener('click', () => {
+            leaderboardExpanded = !leaderboardExpanded;
+            renderLeaderboard(leaderboardPlayers);
+            document.getElementById('container').scrollTop = 0;
+        });
+
         // Handle identity, player list, and board updates from FastAPI.
         socket.onmessage = event => {
             const message = JSON.parse(event.data);
@@ -123,8 +182,19 @@
                     item.textContent = `${client.client_id} | Name: ${client.name ?? 'None'}`;
                     list.appendChild(item);
                 });
+            // A successful click starts the visible five-second cooldown.
+            } else if (message.type === 'click_accepted') {
+                nextClickAllowed = Date.now() + message.cooldown * 1000;
+                updateClickNotice();
+            // Server rejection is authoritative if another request was too soon.
+            } else if (message.type === 'click_rejected') {
+                if (message.remaining) nextClickAllowed = Date.now() + message.remaining * 1000;
+                document.getElementById('clickNotice').textContent = message.reason;
             } else if (message.type === 'board_updated') {
                 renderBoard(message);
+            // Refresh the leaderboard when scores or the weekly reset change.
+            } else if (message.type === 'leaderboard_updated') {
+                renderLeaderboard(message.players);
             }
         };
         socket.onclose = () => {
@@ -156,24 +226,15 @@
 
             // Send the name to FastAPI and save it for page refreshes.
             sessionStorage.setItem('client_name', usernameInput);
+            // Enable clicking after a valid name has been saved.
+            savedPlayerName = usernameInput;
+            updateClickNotice();
             socket.send(JSON.stringify({type: 'set_name', name: usernameInput}));
 
             // Display a message
             message.textContent = `Username saved: ${usernameInput}`;
         });
         });
-        document.addEventListener('DOMContentLoaded', () => {
-        let elements = []
-        let container = document.querySelector('#container')
-        // Add each row to the array
-        container.querySelectorAll('.row').forEach(el => elements.push(el))
-        // Clear the container
-        container.innerHTML = ''
-        // Sort the array from highest to lowest
-        elements.sort((a, b) => b.querySelector('.score').textContent - a.querySelector('.score').textContent)
-        // Put the elements back into the container
-        elements.forEach(e => container.appendChild(e))
-        })
     </script>
 
 </body>

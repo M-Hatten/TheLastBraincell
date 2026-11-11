@@ -116,3 +116,39 @@ h1 {
     width: 40px;
     height: 40px;
 }
+
+/* Keep the leaderboard compact by default and responsive on narrow screens. */
+#container {
+    width: min(600px, calc(100vw - 32px));
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Expanded mode shows up to 20 rows, with scrolling for the remaining players. */
+#container.leaderboard-expanded {
+    max-height: 820px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Make each leaderboard row a consistent height for the 20-row scroll window. */
+#container .row {
+    box-sizing: border-box;
+    height: 41px;
+}
+
+/* Style the dropdown toggle to match the game's dark theme. */
+#leaderboardToggle {
+    margin: 10px 0 20px;
+    padding: 10px 18px;
+    color: #f1f5f9;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* Provide visible hover and keyboard focus feedback. */
+#leaderboardToggle:hover, #leaderboardToggle:focus-visible {
+    background: #334155;
+}

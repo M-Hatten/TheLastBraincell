@@ -19,15 +19,34 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import uuid
+# Use a monotonic clock for server-enforced per-player cooldowns.
+import time
+# Run the weekly reset task while the FastAPI application is running.
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 # Pull the database operations and board logic from their own files.
-from database import initialize_database, save_player, add_point, get_leaderboard, clear_database
+from database import initialize_database, save_player, add_point, get_leaderboard, reset_if_due
 from boardflash import Board
 
 
 # Create the single-process application and initialize persistent storage.
-app = FastAPI()
-initialize_database()
+# The background task starts with FastAPI and stops cleanly on shutdown.
+@asynccontextmanager
+async def lifespan(app):
+    initialize_database()
+    # If the server missed a Sunday reset, apply it before accepting players.
+    reset_if_due()
+    task = asyncio.create_task(weekly_reset_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Serve the CSS file from the static directory.
 STATIC_PATH = Path(__file__).parent / "static"
@@ -192,6 +211,24 @@ class WebsocketManager:
 
 socket_manager = WebsocketManager()
 
+# Track each session's last accepted pixel click across WebSocket reconnects.
+CLICK_COOLDOWN_SECONDS = 5
+last_click_times = {}
+
+
+
+async def weekly_reset_loop():
+    # Check the Sunday 8:00 AM boundary every second while the server is running.
+    while True:
+        await asyncio.sleep(1)
+        if reset_if_due():
+            # Restore currently connected identities with zero scores after the wipe.
+            for player in socket_manager.active_connections[:]:
+                if player.name:
+                    save_player(player.client_id, player.name)
+            # Show the reset leaderboard immediately to every connected browser.
+            await socket_manager.broadcast_leaderboard()
+
 
 @app.get("/")
 def root():
@@ -213,7 +250,8 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"Connected: {connection.client_id}")
 
         # Save the player's UUID and name without overwriting their score.
-        save_player(connection.client_id, connection.name)
+        if connection.name:
+            save_player(connection.client_id, connection.name)
 
         # Tell this browser which UUID represents its session.
         await websocket.send_json({
@@ -248,10 +286,25 @@ async def websocket_endpoint(websocket: WebSocket):
             # Process valid clicks on the single shared board.
             elif message.get("type") == "click":
                 square = message.get("square")
-                if type(square) is int and board.click(square):
+                # Require a saved name and enforce the cooldown on the server.
+                now = time.monotonic()
+                previous_click = last_click_times.get(connection.client_id, float("-inf"))
+                if not connection.name:
+                    await websocket.send_json({"type": "click_rejected", "reason": "Enter and save a name first."})
+                elif now - previous_click < CLICK_COOLDOWN_SECONDS:
+                    await websocket.send_json({
+                        "type": "click_rejected",
+                        "reason": "Wait before clicking another pixel.",
+                        "remaining": round(CLICK_COOLDOWN_SECONDS - (now - previous_click), 1)
+                    })
+                elif type(square) is int and board.click(square):
+                    # Only successful clicks start the five-second cooldown.
+                    last_click_times[connection.client_id] = now
+                    # Confirm the accepted click so the browser can show its cooldown.
+                    await websocket.send_json({"type": "click_accepted", "cooldown": CLICK_COOLDOWN_SECONDS})
                     # Award a persistent point to the final square's clicker.
                     if board.remaining == 0:
-                        add_point(connection.client_id)
+                        add_point(connection.name)
                         await socket_manager.broadcast_leaderboard()
 
                     await socket_manager.broadcast_board(board.state())
