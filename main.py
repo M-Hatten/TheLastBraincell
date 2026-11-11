@@ -1,12 +1,9 @@
-
 """
 Connecting disparate work into one unit.
 
 Needs to be run from a virtual environment.
 -- make directory for virtual env
 python3 -m venv .venv
-source .venv/bin/activate
--- activate virtual env
 source .venv/bin/activate
 -- install required packages to venv (if you don't have them already)
 python -m pip install fastapi "uvicorn[standard]"
@@ -21,10 +18,16 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from boardflash import Board
 import uuid
 
+# Pull the database operations and board logic from their own files.
+from database import initialize_database, save_player, add_point, get_leaderboard, clear_database
+from boardflash import Board
+
+
+# Create the single-process application and initialize persistent storage.
 app = FastAPI()
+initialize_database()
 
 # Serve the CSS file from the static directory.
 STATIC_PATH = Path(__file__).parent / "static"
@@ -32,9 +35,7 @@ app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
 
 # Keep one shared board for all connected browsers.
 board = Board()
-INDEX_PATH = Path(__file__).with_name("index.html") # Filepath for the html that will serve as our webpage
-
-
+INDEX_PATH = Path(__file__).with_name("index.html")
 
 
 class Connection:
@@ -98,9 +99,7 @@ class WebsocketManager:
         connection = Connection(websocket, client_id, name)
 
         # Remove any older active connection using this UUID.
-        old_connection = self.get_connection_by_id(
-            connection.client_id
-        )
+        old_connection = self.get_connection_by_id(connection.client_id)
 
         if old_connection is not None:
             self.active_connections.remove(old_connection)
@@ -120,7 +119,6 @@ class WebsocketManager:
         for connection in self.active_connections:
             if connection.websocket is websocket:
                 return connection
-
         return None
 
     def get_connection_by_id(self, client_id: str):
@@ -128,39 +126,31 @@ class WebsocketManager:
         for connection in self.active_connections:
             if connection.client_id == client_id:
                 return connection
-
         return None
 
     def disconnect(self, websocket: WebSocket):
         # Remove only the Connection associated with this WebSocket.
         connection = self.get_connection(websocket)
-
         if connection is not None:
             self.active_connections.remove(connection)
 
     def get_name(self, websocket: WebSocket):
         # Get the name of an individual connection.
         connection = self.get_connection(websocket)
-
         if connection is not None:
             return connection.name
-
         return None
 
     def set_name(self, websocket: WebSocket, name: str):
         # Set the name of an individual connection.
         connection = self.get_connection(websocket)
-
         if connection is not None:
             connection.set_name(name)
 
     def get_active_clients(self):
         # Return serializable client information, not WebSocket objects.
         return [
-            {
-                "client_id": connection.client_id,
-                "name": connection.name
-            }
+            {"client_id": connection.client_id, "name": connection.name}
             for connection in self.active_connections
         ]
 
@@ -170,7 +160,6 @@ class WebsocketManager:
             "type": "connections_updated",
             "clients": self.get_active_clients()
         }
-
         for connection in self.active_connections[:]:
             try:
                 await connection.websocket.send_json(message)
@@ -178,10 +167,22 @@ class WebsocketManager:
                 # A disconnected client's endpoint handles cleanup.
                 pass
 
-
     async def broadcast_board(self, state):
         # Show every player the same board after a click or reset.
         message = {"type": "board_updated", **state}
+        for connection in self.active_connections[:]:
+            try:
+                await connection.websocket.send_json(message)
+            except Exception:
+                pass
+
+    async def broadcast_leaderboard(self):
+        # Read persistent scores and send the leaderboard to all players.
+        players = [
+            {"client_id": client_id, "name": name, "score": score}
+            for client_id, name, score in get_leaderboard()
+        ]
+        message = {"type": "leaderboard_updated", "players": players}
         for connection in self.active_connections[:]:
             try:
                 await connection.websocket.send_json(message)
@@ -211,15 +212,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
         print(f"Connected: {connection.client_id}")
 
+        # Save the player's UUID and name without overwriting their score.
+        save_player(connection.client_id, connection.name)
+
         # Tell this browser which UUID represents its session.
         await websocket.send_json({
             "type": "welcome",
             "client_id": connection.client_id
         })
 
-        # Send the current shared board and connection list.
+        # Send the current shared board, connections, and saved scores.
         await websocket.send_json({"type": "board_updated", **board.state()})
         await socket_manager.broadcast_connections()
+        await socket_manager.broadcast_leaderboard()
 
         # Listen for messages from the connected browser.
         while True:
@@ -233,13 +238,22 @@ async def websocket_endpoint(websocket: WebSocket):
                 if isinstance(name, str) and name.strip():
                     socket_manager.set_name(websocket, name.strip())
 
-                    # Broadcast the updated names to all connected clients.
+                    # Persist the new name without resetting the score.
+                    save_player(connection.client_id, name.strip())
+
+                    # Broadcast the updated names and leaderboard.
                     await socket_manager.broadcast_connections()
+                    await socket_manager.broadcast_leaderboard()
 
             # Process valid clicks on the single shared board.
             elif message.get("type") == "click":
                 square = message.get("square")
                 if type(square) is int and board.click(square):
+                    # Award a persistent point to the final square's clicker.
+                    if board.remaining == 0:
+                        add_point(connection.client_id)
+                        await socket_manager.broadcast_leaderboard()
+
                     await socket_manager.broadcast_board(board.state())
 
             # Start a fresh round only after the last pixel is gone.
