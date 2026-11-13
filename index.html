@@ -25,7 +25,7 @@
     <!-- Expand the leaderboard to scroll through all players, 20 rows at a time. -->
     <button id="leaderboardToggle" type="button" aria-expanded="false" aria-controls="container" hidden>Show all players ▾</button>
 
-    <div class="username">
+    <div class="username" id="usernameSection">
         <h2>What's your name?</h2>
         <form id="usernameForm">
             <label for="username">Username:</label>
@@ -203,38 +203,45 @@
 
 
         document.addEventListener('DOMContentLoaded', () => {
-        // Check if a username is already saved and display it
+
         const savedUsername = sessionStorage.getItem('client_name');
         const message = document.getElementById('message');
-
-        if (savedUsername) {
-            message.textContent = `Welcome back, ${savedUsername}!`;
-        }
-
-        // Restore the name to the existing form on reload.
-        if (savedUsername) {
-            document.getElementById('username').value = savedUsername;
-        }
-        // Form submission handler
+        const usernameSection = document.getElementById('usernameSection');
         const form = document.getElementById('usernameForm');
-        form.addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent form from refreshing the page
 
-            // Get the entered username
+        // Check if a username has already been saved
+        if (savedUsername) {
+            usernameSection.style.display = 'none';
+            savedPlayerName = savedUsername;
+            updateClickNotice();
+        }
+
+        // Handle username submission
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
             const usernameInput = document.getElementById('username').value.trim();
+
             if (!usernameInput || socket.readyState !== WebSocket.OPEN) return;
 
-            // Send the name to FastAPI and save it for page refreshes.
+            // Save username
             sessionStorage.setItem('client_name', usernameInput);
-            // Enable clicking after a valid name has been saved.
             savedPlayerName = usernameInput;
-            updateClickNotice();
-            socket.send(JSON.stringify({type: 'set_name', name: usernameInput}));
 
-            // Display a message
-            message.textContent = `Username saved: ${usernameInput}`;
+            // Hide username section
+            usernameSection.style.display = 'none';
+
+            // Update game status
+            updateClickNotice();
+
+            // Send username to server
+            socket.send(JSON.stringify({
+                type: 'set_name',
+                name: usernameInput
+            }));
         });
-        });
+
+});
     </script>
 
 </body>
