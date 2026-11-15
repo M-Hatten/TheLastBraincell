@@ -100,6 +100,11 @@ def _literal_type_check(value: Any, /) -> None:
         raise TypeError(f'{value} is not a valid literal value, must be one of: int, bytes, str, Enum, None.')
 
 
+def _unpack_type_alias_chain(alias: Any, /) -> Any:
+    value = alias.__value__
+    return _unpack_type_alias_chain(value) if typing_objects.is_typealiastype(value) else value
+
+
 def get_literal_values(
     annotation: Any,
     /,
@@ -172,6 +177,18 @@ def get_literal_values(
             else:
                 yield arg
     else:
+        for arg in annotation.__args__:
+            if arg is typing_objects.NoneType or typing_objects.is_typealiastype(arg):
+                break
+        else:
+            # Fast path: if there are no type aliases to unpack and no `NoneType` (which `Literal`
+            # doesn't deduplicate with `None`), the parameters are already deduplicated.
+            if type_check:
+                for arg in annotation.__args__:
+                    _literal_type_check(arg)
+            yield from annotation.__args__
+            return
+
         # We'll need to manually deduplicate parameters, see the `Literal` implementation in `typing`.
         values_and_type: list[tuple[Any, type[Any]]] = []
 
@@ -182,7 +199,7 @@ def get_literal_values(
             # `type Test[T] = Literal['a']` (and then use `Test[SomeType]`).
             if typing_objects.is_typealiastype(arg):
                 try:
-                    alias_value = arg.__value__
+                    alias_value = _unpack_type_alias_chain(arg)
                 except NameError:
                     if unpack_type_aliases == 'eager':
                         raise

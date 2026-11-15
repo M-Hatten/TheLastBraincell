@@ -29,12 +29,19 @@ from contextlib import asynccontextmanager, suppress
 from database import initialize_database, save_player, add_point, get_leaderboard, reset_if_due
 from boardflash import Board
 
+# Development switches: disable click cooldown and reset the board at startup.
+DEBUG = True
+CLEAR_BOARD = True
+
 
 # Create the single-process application and initialize persistent storage.
 # The background task starts with FastAPI and stops cleanly on shutdown.
 @asynccontextmanager
 async def lifespan(app):
     initialize_database()
+    # Explicitly start with a fresh board when this option is enabled.
+    if CLEAR_BOARD:
+        board.reset()
     # If the server missed a Sunday reset, apply it before accepting players.
     reset_if_due()
     task = asyncio.create_task(weekly_reset_loop())
@@ -54,6 +61,10 @@ app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
 
 # Keep one shared board for all connected browsers.
 board = Board()
+# Remember the winner until the server starts the next round.
+round_winner_id = None
+# Keep the server-owned reset task from being garbage collected.
+round_reset_task = None
 INDEX_PATH = Path(__file__).with_name("index.html")
 
 
@@ -211,6 +222,30 @@ class WebsocketManager:
 
 socket_manager = WebsocketManager()
 
+
+async def broadcast_game_results(winner_id):
+    # Send each connected browser its own result using its session UUID.
+    for player in socket_manager.active_connections[:]:
+        try:
+            await player.websocket.send_json({
+                "type": "game_result",
+                "result": "win" if player.client_id == winner_id else "lose"
+            })
+        except Exception:
+            # Disconnected clients are cleaned up by their WebSocket endpoints.
+            pass
+
+
+async def reset_round_after_delay():
+    global round_winner_id, round_reset_task
+    # Give players two seconds to see their result before a new round begins.
+    await asyncio.sleep(2)
+    board.reset()
+    round_winner_id = None
+    round_reset_task = None
+    # The next board update clears the result on every browser.
+    await socket_manager.broadcast_board(board.state())
+
 # Track each session's last accepted pixel click across WebSocket reconnects.
 CLICK_COOLDOWN_SECONDS = 5
 last_click_times = {}
@@ -238,6 +273,7 @@ def root():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global round_winner_id, round_reset_task
     connection = None
 
     try:
@@ -261,6 +297,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Send the current shared board, connections, and saved scores.
         await websocket.send_json({"type": "board_updated", **board.state()})
+        # A player reconnecting during the result screen sees the correct outcome.
+        if board.remaining == 0 and round_winner_id is not None:
+            await websocket.send_json({
+                "type": "game_result",
+                "result": "win" if connection.client_id == round_winner_id else "lose"
+            })
         await socket_manager.broadcast_connections()
         await socket_manager.broadcast_leaderboard()
 
@@ -291,7 +333,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 previous_click = last_click_times.get(connection.client_id, float("-inf"))
                 if not connection.name:
                     await websocket.send_json({"type": "click_rejected", "reason": "Enter and save a name first."})
-                elif now - previous_click < CLICK_COOLDOWN_SECONDS:
+                elif not DEBUG and now - previous_click < CLICK_COOLDOWN_SECONDS:
                     await websocket.send_json({
                         "type": "click_rejected",
                         "reason": "Wait before clicking another pixel.",
@@ -299,21 +341,25 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                 elif type(square) is int and board.click(square):
                     # Only successful clicks start the five-second cooldown.
-                    last_click_times[connection.client_id] = now
-                    # Confirm the accepted click so the browser can show its cooldown.
-                    await websocket.send_json({"type": "click_accepted", "cooldown": CLICK_COOLDOWN_SECONDS})
+                    if not DEBUG:
+                        last_click_times[connection.client_id] = now
+                    # Tell the browser to skip its local cooldown in debug mode.
+                    await websocket.send_json({"type": "click_accepted", "cooldown": 0 if DEBUG else CLICK_COOLDOWN_SECONDS})
                     # Award a persistent point to the final square's clicker.
                     if board.remaining == 0:
+                        # Record the UUID of the player who removed the final pixel.
+                        round_winner_id = connection.client_id
                         add_point(connection.name)
                         await socket_manager.broadcast_leaderboard()
 
                     await socket_manager.broadcast_board(board.state())
 
-            # Start a fresh round only after the last pixel is gone.
-            elif message.get("type") == "reset":
-                if board.remaining == 0:
-                    board.reset()
-                    await socket_manager.broadcast_board(board.state())
+                    if board.remaining == 0:
+                        # Send the winner and all other players personalized messages.
+                        await broadcast_game_results(round_winner_id)
+                        # Reset on the server, even if the winning browser disconnects.
+                        round_reset_task = asyncio.create_task(reset_round_after_delay())
+
 
     except WebSocketDisconnect:
         if connection is not None:

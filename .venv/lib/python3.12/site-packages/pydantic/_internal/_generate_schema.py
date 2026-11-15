@@ -13,7 +13,6 @@ import sys
 import typing
 import warnings
 from collections.abc import Callable, Generator, Iterable, Iterator, Mapping
-from contextlib import contextmanager
 from copy import copy
 from decimal import Decimal
 from enum import Enum
@@ -80,6 +79,7 @@ from ..warnings import (
 )
 from . import _decorators, _discriminated_union, _known_annotated_metadata, _repr, _type_refs, _typing_extra
 from ._config import ConfigWrapper, ConfigWrapperStack
+from ._contextlib import contextmanager
 from ._core_metadata import CoreMetadata, update_core_metadata
 from ._core_utils import (
     get_ref,
@@ -140,6 +140,46 @@ GetCoreSchemaFunction: TypeAlias = Callable[[Any, ModifyCoreSchemaWrapHandler], 
 ParametersCallback: TypeAlias = Callable[[int, str, Any], Literal['skip'] | None]
 
 TUPLE_TYPES: list[type] = [typing.Tuple, tuple]  # noqa: UP006
+_NONE_SCHEMA = core_schema.none_schema()
+_CALLABLE_SCHEMA = core_schema.callable_schema()
+
+
+_SIMPLE_SCHEMA_TYPES: frozenset[type[Any]] = frozenset(
+    {
+        str,
+        int,
+        bool,
+        float,
+        bytes,
+        complex,
+        NoneType,
+        object,
+        type,
+        EllipsisType,
+        re.Pattern,
+        datetime.datetime,
+        datetime.date,
+        datetime.time,
+        datetime.timedelta,
+        Decimal,
+        ZoneInfo,
+    }
+)
+"""Exact types handled directly, without checking for `__get_pydantic_core_schema__()`/`__get_pydantic_json_schema__()` methods."""
+
+
+def _is_simple_schema_type(obj: Any) -> bool:
+    return obj is None or (type(obj) is type and obj in _SIMPLE_SCHEMA_TYPES)
+
+
+def _copy_schema_handler(schema: CoreSchema) -> Callable[[GenerateSchema, Any], CoreSchema]:
+    """Return fresh copies of a fixed schema made only of immutable values."""
+
+    def handler(self: GenerateSchema, obj: Any) -> CoreSchema:
+        return schema.copy()
+
+    return handler
+
 
 # Note: This does not play very well with type checkers. For example,
 # `a: LambdaType = lambda x: x` will raise a type error by Pyright.
@@ -382,26 +422,26 @@ class GenerateSchema:
     # The handler lambdas take the `GenerateSchema` instance as their first argument, so that
     # the dicts can be built once at class creation time and shared by all instances:
     _handlers: ClassVar[dict[Any, Callable[[GenerateSchema, Any], core_schema.CoreSchema]]] = {
-        str: lambda self, obj: core_schema.str_schema(),
-        bytes: lambda self, obj: core_schema.bytes_schema(),
-        int: lambda self, obj: core_schema.int_schema(),
-        float: lambda self, obj: core_schema.float_schema(),
-        bool: lambda self, obj: core_schema.bool_schema(),
-        complex: lambda self, obj: core_schema.complex_schema(),
-        object: lambda self, obj: core_schema.any_schema(),
-        datetime.date: lambda self, obj: core_schema.date_schema(),
-        datetime.datetime: lambda self, obj: core_schema.datetime_schema(),
-        datetime.time: lambda self, obj: core_schema.time_schema(),
-        datetime.timedelta: lambda self, obj: core_schema.timedelta_schema(),
-        Decimal: lambda self, obj: core_schema.decimal_schema(),
-        UUID: lambda self, obj: core_schema.uuid_schema(),
-        Url: lambda self, obj: core_schema.url_schema(),
-        Fraction: lambda self, obj: core_schema.fraction_schema(),
-        MultiHostUrl: lambda self, obj: core_schema.multi_host_url_schema(),
-        None: lambda self, obj: core_schema.none_schema(),
-        NoneType: lambda self, obj: core_schema.none_schema(),
-        MISSING: lambda self, obj: core_schema.missing_sentinel_schema(),
-        EllipsisType: lambda self, obj: core_schema.ellipsis_schema(),
+        str: _copy_schema_handler(core_schema.str_schema()),
+        bytes: _copy_schema_handler(core_schema.bytes_schema()),
+        int: _copy_schema_handler(core_schema.int_schema()),
+        float: _copy_schema_handler(core_schema.float_schema()),
+        bool: _copy_schema_handler(core_schema.bool_schema()),
+        complex: _copy_schema_handler(core_schema.complex_schema()),
+        object: _copy_schema_handler(core_schema.any_schema()),
+        datetime.date: _copy_schema_handler(core_schema.date_schema()),
+        datetime.datetime: _copy_schema_handler(core_schema.datetime_schema()),
+        datetime.time: _copy_schema_handler(core_schema.time_schema()),
+        datetime.timedelta: _copy_schema_handler(core_schema.timedelta_schema()),
+        Decimal: _copy_schema_handler(core_schema.decimal_schema()),
+        UUID: _copy_schema_handler(core_schema.uuid_schema()),
+        Url: _copy_schema_handler(core_schema.url_schema()),
+        Fraction: _copy_schema_handler(core_schema.fraction_schema()),
+        MultiHostUrl: _copy_schema_handler(core_schema.multi_host_url_schema()),
+        None: _copy_schema_handler(_NONE_SCHEMA),
+        NoneType: _copy_schema_handler(_NONE_SCHEMA),
+        MISSING: _copy_schema_handler(core_schema.missing_sentinel_schema()),
+        EllipsisType: _copy_schema_handler(core_schema.ellipsis_schema()),
         type: lambda self, obj: self._type_schema(),
         dict: lambda self, obj: self._dict_schema(Any, Any),
         tuple: lambda self, obj: self._tuple_schema(obj),
@@ -420,7 +460,7 @@ class GenerateSchema:
         collections.OrderedDict: lambda self, obj: self._ordered_dict_schema(Any, Any),
         collections.defaultdict: lambda self, obj: self._mapping_schema(obj, Any, Any),
         collections.Counter: lambda self, obj: self._counter_schema(Any),
-        collections.abc.Callable: lambda self, obj: core_schema.callable_schema(),
+        collections.abc.Callable: _copy_schema_handler(_CALLABLE_SCHEMA),
         collections.abc.Hashable: lambda self, obj: self._hashable_schema(),
         IPv4Address: lambda self, obj: self._ip_schema(obj),
         IPv4Interface: lambda self, obj: self._ip_schema(obj),
@@ -476,7 +516,7 @@ class GenerateSchema:
         collections.abc.Iterable: lambda self, obj: self._iterable_schema(obj),
         collections.abc.Generator: lambda self, obj: self._iterable_schema(obj),
         re.Pattern: lambda self, obj: self._pattern_schema(obj),
-        collections.abc.Callable: lambda self, obj: core_schema.callable_schema(),
+        collections.abc.Callable: _copy_schema_handler(_CALLABLE_SCHEMA),
     }
 
     if sys.version_info >= (3, 15):
@@ -815,6 +855,11 @@ class GenerateSchema:
                 - If `typing.TypedDict` is used instead of `typing_extensions.TypedDict` on Python < 3.12.
                 - If `__modify_schema__` method is used instead of `__get_pydantic_json_schema__`.
         """
+        if _is_simple_schema_type(obj):
+            return _add_custom_serialization_from_json_encoders(
+                self._config_wrapper.json_encoders, obj, self._handlers[obj](self, obj)
+            )
+
         origin = get_origin(obj)
         schema: CoreSchema | None = None
         if origin is None:
@@ -1106,7 +1151,7 @@ class GenerateSchema:
         origin = origin if origin is not PydanticUndefined else get_origin(obj)
 
         if is_union_origin(origin):
-            return self._union_schema(obj)
+            return self._direct_union_schema(obj)
 
         if typing_objects.is_annotated(origin):
             return self._annotated_schema(obj)
@@ -1355,6 +1400,24 @@ class GenerateSchema:
 
         return schema, core_metadata
 
+    def _direct_union_schema(self, obj: Any) -> CoreSchema:
+        """Generate the optimized union schema without enlarging general dispatch frames."""
+        if not self._config_wrapper.json_encoders:
+            args = get_args(obj)
+            # These exact simple types cannot attach hooks or union tags. Field-level
+            # metadata and validators still process the fresh schema normally.
+            if all(map(_is_simple_schema_type, args)):
+                choices = [self._handlers[arg](self, arg) for arg in args if arg is not NoneType]
+                if len(choices) == 1:
+                    schema = choices[0]
+                else:
+                    schema = cast(core_schema.UnionSchema, {'type': 'union', 'choices': choices})
+                if len(choices) < len(args):  # one of the args is NoneType, so we need to make the schema nullable
+                    return {'type': 'nullable', 'schema': schema}
+                else:
+                    return schema
+        return self._union_schema(obj)
+
     def _union_schema(self, union_type: Any) -> core_schema.CoreSchema:
         """Generate schema for a Union."""
         args = self._get_args_resolving_forward_refs(union_type, required=True)
@@ -1362,7 +1425,7 @@ class GenerateSchema:
         nullable = False
         allow_missing = False
         for arg in args:
-            if arg is None or arg is NoneType:
+            if arg is NoneType:
                 nullable = True
             elif arg is MISSING:
                 allow_missing = True
@@ -2290,11 +2353,11 @@ class GenerateSchema:
         not expect `source_type` to be an `Annotated` object, it expects it to be  the first argument of that
         (in other words, `GenerateSchema._annotated_schema` just unpacks `Annotated`, this process it).
         """
-        annotations = list(_known_annotated_metadata.expand_grouped_metadata(annotations))
-
-        pydantic_js_annotation_functions: list[GetJsonSchemaFunction] = []
 
         def inner_handler(obj: Any) -> CoreSchema:
+            if _is_simple_schema_type(obj):
+                return transform_inner_schema(self._handlers[obj](self, obj))
+
             origin = get_origin(obj)
             schema: CoreSchema | None = None
             if origin is None:
@@ -2313,6 +2376,15 @@ class GenerateSchema:
                     self._add_js_function(metadata_schema, metadata_js_function)
             return transform_inner_schema(schema)
 
+        if not annotations:
+            schema = inner_handler(source_type)
+            # Preserve the callback handler's reference conversion before applying encoders.
+            if schema.get('ref') is not None:
+                schema = self.defs.create_definition_reference_schema(schema)
+            return _add_custom_serialization_from_json_encoders(self._config_wrapper.json_encoders, source_type, schema)
+
+        annotations = list(_known_annotated_metadata.expand_grouped_metadata(annotations))
+        pydantic_js_annotation_functions: list[GetJsonSchemaFunction] = []
         get_inner_schema = CallbackGetCoreSchemaHandler(inner_handler, self)
 
         for annotation in annotations:
@@ -2346,7 +2418,7 @@ class GenerateSchema:
                 # with its subclasses and their annotations:
                 and type(metadata) is FieldInfo
             ):
-                for attr, value in (unsupported_attributes := self._get_unsupported_field_info_attributes(metadata)):
+                for attr, value in self._get_unsupported_field_info_attributes(metadata):
                     warnings.warn(
                         f'The {attr!r} attribute with value {value!r} was provided to the `Field()` function, '
                         f'which has no effect in the context it was used. {attr!r} is field-specific metadata, '
@@ -2356,11 +2428,8 @@ class GenerateSchema:
                         category=UnsupportedFieldAttributeWarning,
                     )
 
-                if (
-                    metadata.default_factory_takes_validated_data
-                    and self.model_type_stack.get() is None
-                    and 'defaut_factory' not in unsupported_attributes
-                ):
+                # Inside a model, a standalone `default_factory` is already reported as unsupported above:
+                if metadata.default_factory_takes_validated_data and self.model_type_stack.get() is None:
                     warnings.warn(
                         "A 'default_factory' taking validated data as an argument was provided to the `Field()` function, "
                         'but no validated data is available in the context it was used.',

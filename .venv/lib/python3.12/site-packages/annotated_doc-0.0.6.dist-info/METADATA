@@ -1,8 +1,8 @@
 Metadata-Version: 2.4
 Name: annotated-doc
-Version: 0.0.5
+Version: 0.0.6
 Summary: Document parameters, class attributes, return types, and variables inline, with Annotated.
-Author-Email: =?utf-8?q?Sebasti=C3=A1n_Ram=C3=ADrez?= <tiangolo@gmail.com>
+Author-Email: Sebastián Ramírez <tiangolo@gmail.com>
 License-Expression: MIT
 License-File: LICENSE
 Classifier: Intended Audience :: Information Technology
@@ -19,18 +19,18 @@ Classifier: Typing :: Typed
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: Developers
 Classifier: Programming Language :: Python :: 3 :: Only
-Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Programming Language :: Python :: 3.14
+Classifier: Programming Language :: Python :: 3.15
 Project-URL: Homepage, https://github.com/fastapi/annotated-doc
 Project-URL: Documentation, https://github.com/fastapi/annotated-doc
 Project-URL: Repository, https://github.com/fastapi/annotated-doc
 Project-URL: Issues, https://github.com/fastapi/annotated-doc/issues
 Project-URL: Changelog, https://github.com/fastapi/annotated-doc/release-notes.md
-Requires-Python: >=3.9
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 
 # Annotated Doc
@@ -73,6 +73,7 @@ from typing import Annotated
 
 from annotated_doc import Doc
 
+
 def hi(name: Annotated[str, Doc("Who to say hi to")]) -> None:
     print(f"Hi, {name}!")
 ```
@@ -83,6 +84,7 @@ You can also use it to document class attributes:
 from typing import Annotated
 
 from annotated_doc import Doc
+
 
 class User:
     name: Annotated[str, Doc("The user's name")]

@@ -38,6 +38,12 @@
     <!-- Show name and cooldown feedback without changing the shared board. -->
     <p id="clickNotice" role="status">Save a name to start playing.</p>
 
+    <!-- Display the personal round result prominently beside the board. -->
+    <div id="roundResult" role="status" aria-live="polite" hidden
+         style="max-width: 420px; margin: 16px auto; padding: 16px; border: 2px solid; border-radius: 12px; text-align: center; font-weight: bold; font-size: 1.5rem; box-sizing: border-box;">
+        <span id="roundResultText"></span>
+    </div>
+
     <!-- JavaScript fills the board using the shared server state. -->
     <div class="board" id="board"></div>
 
@@ -100,21 +106,31 @@
                 }
                 board.appendChild(square);
             }
+            // Clear the result banner when a new round starts.
+            if (!state.won && gameResult !== null) {
+                gameResult = null;
+                showGameResult(null);
+            }
+            // Keep the remaining-pixel counter independent of the result banner.
             document.getElementById('status').textContent =
                 state.won ? 'Last Pixel Clicked!' : `${state.left} left`;
             document.getElementById('count').textContent = `Clicks: ${state.clicks}`;
-            // After a win, a connected browser requests a reset after two seconds.
-            if (state.won && !resetPending) {
-                resetPending = true;
-                setTimeout(() => {
-                    if (socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify({type: 'reset'}));
-                    }
-                    resetPending = false;
-                }, 2000);
-            }
         }
-        let resetPending = false;
+        // Store the personal win/loss message until the next round starts.
+        let gameResult = null;
+
+        // Show a prominent, accessible result banner without replacing the pixel counter.
+        function showGameResult(result) {
+            const banner = document.getElementById('roundResult');
+            const text = document.getElementById('roundResultText');
+            banner.hidden = !result;
+            if (!result) return;
+            const won = result === 'win';
+            text.textContent = won ? 'You win! You clicked the last pixel!' : 'You lose! Another player clicked the last pixel.';
+            banner.style.backgroundColor = won ? '#123324' : '#3b1c22';
+            banner.style.borderColor = won ? '#16a34a' : '#dc2626';
+            banner.style.color = won ? '#bbf7d0' : '#fecaca';
+        }
 
         // Keep the complete leaderboard in memory so the display can be expanded or collapsed.
         let leaderboardPlayers = [];
@@ -190,6 +206,10 @@
             } else if (message.type === 'click_rejected') {
                 if (message.remaining) nextClickAllowed = Date.now() + message.remaining * 1000;
                 document.getElementById('clickNotice').textContent = message.reason;
+            // Show the server's personalized result for this browser.
+            } else if (message.type === 'game_result') {
+                gameResult = message.result;
+                showGameResult(gameResult);
             } else if (message.type === 'board_updated') {
                 renderBoard(message);
             // Refresh the leaderboard when scores or the weekly reset change.

@@ -1,6 +1,6 @@
 Metadata-Version: 2.5
 Name: typing-inspection
-Version: 0.4.4
+Version: 0.4.5
 Summary: Runtime typing introspection tools
 Project-URL: Homepage, https://github.com/pydantic/typing-inspection
 Project-URL: Documentation, https://pydantic.github.io/typing-inspection/dev/

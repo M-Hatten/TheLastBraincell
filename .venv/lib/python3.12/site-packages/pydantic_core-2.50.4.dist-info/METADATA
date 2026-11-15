@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: pydantic_core
-Version: 2.50.2
+Version: 2.50.4
 Classifier: Development Status :: 3 - Alpha
 Classifier: Programming Language :: Python
 Classifier: Programming Language :: Python :: 3
@@ -20,6 +20,7 @@ Classifier: Intended Audience :: Information Technology
 Classifier: Operating System :: POSIX :: Linux
 Classifier: Operating System :: Microsoft :: Windows
 Classifier: Operating System :: MacOS
+Classifier: Environment :: WebAssembly :: Emscripten
 Classifier: Typing :: Typed
 Requires-Dist: typing-extensions>=4.16.0
 License-File: LICENSE
