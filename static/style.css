@@ -159,38 +159,35 @@ h1 {
 }
 
 /* Medal styling for the first three rows, based on sorted leaderboard order. */
-#container .row:nth-child(2) {
+/* First place - Gold */
+#container .row:nth-of-type(1) {
     background: linear-gradient(90deg, #59451b66, #252b38);
 }
-#container .row:nth-child(2)::before {
+#container .row:nth-of-type(1)::before {
     content: "🥇";
     font-size: 17px;
 }
-#container .row:nth-child(2) .score {
-    color: #ffdc79;
-}
 
-#container .row:nth-child(3) {
+/* Second place - Silver */
+#container .row:nth-of-type(2) {
     background: linear-gradient(90deg, #46566a66, #252d3b);
 }
-#container .row:nth-child(3)::before {
+#container .row:nth-of-type(2)::before {
     content: "🥈";
     font-size: 17px;
 }
-#container .row:nth-child(3) .score {
-    color: #dce5f0;
-}
 
-#container .row:nth-child(4) {
+/* Third place - Bronze */
+#container .row:nth-of-type(3) {
     background: linear-gradient(90deg, #67452d66, #2b2b37);
 }
-#container .row:nth-child(4)::before {
+#container .row:nth-of-type(3)::before {
     content: "🥉";
     font-size: 17px;
 }
-#container .row:nth-child(4) .score {
-    color: #efb184;
-}
+#container .row:nth-of-type(1) .score { color: #ffdc79; }
+#container .row:nth-of-type(2) .score { color: #dce5f0; }
+#container .row:nth-of-type(3) .score { color: #efb184; }
 
 /* Keep the full leaderboard scrollable in expanded mode. */
 #container.leaderboard-expanded {
