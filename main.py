@@ -29,9 +29,8 @@ from contextlib import asynccontextmanager, suppress
 from database import initialize_database, save_player, add_point, get_leaderboard, reset_if_due
 from boardflash import Board
 
-# Development switches: disable click cooldown and reset the board at startup.
-DEBUG = True
-CLEAR_BOARD = True
+# Development switch: False enforces the normal five-second click cooldown.
+DEBUG = False
 
 
 # Create the single-process application and initialize persistent storage.
@@ -39,9 +38,6 @@ CLEAR_BOARD = True
 @asynccontextmanager
 async def lifespan(app):
     initialize_database()
-    # Explicitly start with a fresh board when this option is enabled.
-    if CLEAR_BOARD:
-        board.reset()
     # If the server missed a Sunday reset, apply it before accepting players.
     reset_if_due()
     task = asyncio.create_task(weekly_reset_loop())

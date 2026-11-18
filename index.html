@@ -47,11 +47,6 @@
     <!-- JavaScript fills the board using the shared server state. -->
     <div class="board" id="board"></div>
 
-    <!-- Keep the current browser session visible alongside the game. -->
-    <p>Your Client ID: <span id="client_id">Connecting...</span></p>
-    <h2>Active Connections:</h2>
-    <ul id="connections"></ul>
-
     <script>
         // Restore this tab's identity and connect to the FastAPI server.
         let client_id = sessionStorage.getItem('client_id');
@@ -189,15 +184,6 @@
             if (message.type === 'welcome') {
                 client_id = message.client_id;
                 sessionStorage.setItem('client_id', client_id);
-                document.getElementById('client_id').textContent = client_id;
-            } else if (message.type === 'connections_updated') {
-                const list = document.getElementById('connections');
-                list.replaceChildren();
-                message.clients.forEach(client => {
-                    const item = document.createElement('li');
-                    item.textContent = `${client.client_id} | Name: ${client.name ?? 'None'}`;
-                    list.appendChild(item);
-                });
             // A successful click starts the visible five-second cooldown.
             } else if (message.type === 'click_accepted') {
                 nextClickAllowed = Date.now() + message.cooldown * 1000;
@@ -217,10 +203,6 @@
                 renderLeaderboard(message.players);
             }
         };
-        socket.onclose = () => {
-            document.getElementById('client_id').textContent = 'Disconnected';
-        };
-
 
         document.addEventListener('DOMContentLoaded', () => {
 
