@@ -147,6 +147,10 @@ William:
 > Using Caddy I updated the websockets based on the user session
 > I embedded the IP into a created domain and enabled a HTTP and HTTPS connection  
 
+Milo:
+> I was responsible for designing the website, the leaderboard, tracking player data, and linking the HTML page to the Python script.
+> I used ChatGPT to assist me in linking HTML and Python. It was useful in helping me figure out what tools I needed to use to make things work properly
+
 ## Known Limitations and Future Improvements
 
 We made the application not require or store login information, to reduce project scope and give users
