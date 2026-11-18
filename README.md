@@ -138,6 +138,7 @@ Alyssa:
 > I did use Claude AI to figure out how to display win or lose through users. This was a bit difficult but thanks to my groupmate, Sean, he was able to rearrange somethings so it can connect to the fastapi. 
 >
 > Link to chat: https://claude.ai/share/76adcaab-fc49-45b1-b70d-e228b7672661
+
 William:
 > I was responsible to get the AWS Backend operational.
 >
