@@ -66,6 +66,7 @@ in a different section of this documentation.
 - WebSockets (real-time two-way communication)
 - HTML, CSS, JavaScript (frontend)
 - SQLite (persistent leaderboard)
+- Caddy (ip to Domain redirection)
 
 
 ## File structure
@@ -137,6 +138,13 @@ Alyssa:
 > I did use Claude AI to figure out how to display win or lose through users. This was a bit difficult but thanks to my groupmate, Sean, he was able to rearrange somethings so it can connect to the fastapi. 
 >
 > Link to chat: https://claude.ai/share/76adcaab-fc49-45b1-b70d-e228b7672661
+William:
+> I was responsible to get the AWS Backend operational.
+>
+> I used claud.ai to assist with this process due to the amount of documentation and possible options avalable.
+> I ended up using a basic EC2 VM with an assigned elastic IP to keep a constant IP.
+> Using Caddy I updated the websockets based on the user session
+> I embedded the IP into a created domain and enabled a HTTP and HTTPS connection  
 
 ## Known Limitations and Future Improvements
 
