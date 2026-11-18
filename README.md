@@ -117,6 +117,11 @@ style.css
 
 # AWS Server Information
 
+This project is hosted on a EC2 Amazon VM and has an active Elastic IP
+Access is determined by the AWS security groups managed in the security group portal
+
+
+Information on the Elastic IP/Domain setup is found in the Wiki
 
 
 # Project information
