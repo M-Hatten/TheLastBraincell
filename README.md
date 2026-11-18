@@ -95,7 +95,11 @@ Uvicorn loads the FastAPI application defined in main.py
 - There is a DEBUG mode in the main app that turns off the rate limit on user inputs
     - This is ideal for testing locally on a host to make sure everything works
 
-boardflash.py 
+boardflash.py is where the entire board and its functions come in
+- The board has 36 square tiles(pixels) that players can click.
+      - There is a function that keeps track of how many pixels did the player click. 
+- Once all the pixels are clicked, whoever clicked the last one will get the display "You win!" and "You lose!" for those that didn't.
+- After the display, the board will reset to full after a few seconds. 
 
 
 database.py handles the leaderboard code, and game.db stores it
@@ -127,6 +131,12 @@ Sean:
 >
 > Here's a link to view the conversation I had with ChatGPT6:
 > https://chatgpt.com/share/6afdd1cf-d058-83ea-8e33-5d4b57869517
+>
+Alyssa:
+> I was responsible for creating the board itself.
+> I did use Claude AI to figure out how to display win or lose through users. This was a bit difficult but thanks to my groupmate, Sean, he was able to rearrange somethings so it can connect to the fastapi. 
+>
+> Link to chat: https://claude.ai/share/76adcaab-fc49-45b1-b70d-e228b7672661
 
 ## Known Limitations and Future Improvements
 
@@ -138,3 +148,5 @@ This was a trade-off we made during development.
 For the future, we would probably store login credentials, and provide a way to retrieve or reset login
 credentials via email. That functionality was outside our intended scope for this project during the first
 couple of sprints.
+
+We could also have board options for players. There would be some of different shapes and many more pixels to click. This was an idea we considered for this project, however, given the time we had, we had to go with a simple 6x6 board. 
