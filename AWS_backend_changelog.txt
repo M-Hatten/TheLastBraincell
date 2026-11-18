@@ -72,3 +72,4 @@ The AWS has been constucted with the assistance of Claude.ai
   - Elastic Ip deployed to VM
   - Created Domain for wedsite
   - VM attached to Domain and working
+  - Moved git repository to app      
